@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Vocabulary Matching Game</title>
+<style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .columns { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap; }
+    .column { flex: 1 1 45%; display: flex; flex-direction: column; gap: 10px; }
+    .card { padding: 10px; border: 1px solid #ccc; cursor: pointer; background: #f9f9f9; }
+    .matched { background: #c8e6c9; }
+    .hint { color: red; }
+    #score { font-weight: bold; margin-top: 10px; }
+    #maxVisibleLabel { margin-left: 15px; }
+  </style>
+</head>
+<body>
+<h2>Vocabulary Matching Game: match the word to its English word</h2>
+<div id="score">Score: 0</div>
+<label><input id="layoutToggle" type="checkbox"/> Mixed layout</label>
+<label id="maxVisibleLabel"> Max words shown:
+    <select id="maxVisibleSelect">
+<option value="6">6</option>
+<option selected="" value="8">8</option>
+<option value="10">10</option>
+<option value="12">12</option>
+</select>
+</label>
+<div class="hint" id="hint"></div>
+<div id="gameContainer"></div>
+<button onclick="resetGame('mistakes')">Reset: Review Mistakes</button>
+<button onclick="resetGame('new')">Reset: Maximize New Words</button>
+<button onclick="exportMistakes()">Export Mistake List</button>
+<div class="youtube-link-box">
+<label for="ytLink" style="font-weight: bold;">YouTube Channel:</label><br/>
+<div style="display: flex; gap: 10px; align-items: center;">
+<button onclick="copyYTLink()">Copy</button>
+<input id="ytLink" readonly="" style="width: 300px; padding:5px;" type="text" value="https://www.youtube.com/@ResonantFrequency1/shorts"/>
+</div>
+</div>
+<script>
+  function copyYTLink() {
+    const ytInput = document.getElementById("ytLink");
+    ytInput.select();
+    ytInput.setSelectionRange(0, 99999);
+    try {
+      document.execCommand("copy");
+    } catch (err) {
+      alert("Failed to copy the link.");
+    }
+  }
+</script>
+<script>
+    const fullVocab = [
+  {
+    "langa": "kind",
+    "langb": "lieb, nett"
+  },
+  {
+    "langa": "a kind of / a sort of",
+    "langb": "eine Art"
+  },
+  {
+    "langa": "kudos / praise",
+    "langb": "Lob"
+  },
+  {
+    "langa": "compliment",
+    "langb": "Kompliment"
+  },
+  {
+    "langa": "You are not the only one",
+    "langb": "Du bist nicht der/die Einzige"
+  },
+  {
+    "langa": "monitor / screen / display",
+    "langb": "der Bildschirm"
+  },
+  {
+    "langa": "red light",
+    "langb": "rotes Licht"
+  },
+  {
+    "langa": "beep",
+    "langb": "das Piepen"
+  },
+  {
+    "langa": "plug it in",
+    "langb": "einstecken"
+  },
+  {
+    "langa": "unplug",
+    "langb": "ausstecken"
+  },
+  {
+    "langa": "wire",
+    "langb": "das Kabel"
+  },
+  {
+    "langa": "the ground",
+    "langb": "die Erde"
+  },
+  {
+    "langa": "black or brown",
+    "langb": "schwarz oder braun"
+  },
+  {
+    "langa": "blue (negative)",
+    "langb": "blau (negativ)"
+  },
+  {
+    "langa": "usually",
+    "langb": "normalerweise"
+  },
+  {
+    "langa": "current",
+    "langb": "die Spannung"
+  },
+  {
+    "langa": "tracer",
+    "langb": "der Prüfgerät / Tracer"
+  },
+  {
+    "langa": "point",
+    "langb": "der Punkt"
+  },
+  {
+    "langa": "We call it",
+    "langb": "Wir nennen es"
+  },
+  {
+    "langa": "called",
+    "langb": "genannt"
+  },
+  {
+    "langa": "border",
+    "langb": "die Grenze"
+  },
+  {
+    "langa": "Störsignal",
+    "langb": "jamming signal"
+  },
+  {
+    "langa": "You couldn’t see behind the wall",
+    "langb": "Man konnte nicht hinter die Mauer sehen"
+  },
+  {
+    "langa": "open the border",
+    "langb": "die Grenze öffnen"
+  },
+  {
+    "langa": "Tear down this wall",
+    "langb": "Reißt diese Mauer nieder"
+  },
+  {
+    "langa": "war",
+    "langb": "der Krieg"
+  },
+  {
+    "langa": "The right man at the right time",
+    "langb": "der richtige Mann zur richtigen Zeit"
+  },
+  {
+    "langa": "You can go your own way",
+    "langb": "Du kannst deinen eigenen Weg gehen"
+  }
+];
+
+    let score = parseInt(localStorage.getItem('matchGameScore') || 0);
+    let resetCount = 0;
+    let mistakeTracker = {};
+    let currentVocab = [];
+    let selected = [];
+
+    function getMaxVisible() {
+      const select = document.getElementById("maxVisibleSelect");
+      return parseInt(select.value);
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    function updateScoreDisplay() {
+      document.getElementById("score").textContent = `Score: ${score}`;
+    }
+
+    function buildGame() {
+      const container = document.getElementById("gameContainer");
+      container.innerHTML = '<div class="columns"><div id="col1" class="column"></div><div id="col2" class="column"></div></div>';
+      const col1 = document.getElementById("col1");
+      const col2 = document.getElementById("col2");
+      selected = [];
+
+      const useMixed = document.getElementById("layoutToggle").checked;
+      const items = [];
+
+      if (useMixed) {
+        currentVocab.forEach(pair => {
+          items.push({text: pair.langb, match: pair.langa});
+          items.push({text: pair.langa, match: pair.langb});
+        });
+      } else {
+        const german = [...currentVocab];
+        const english = [...currentVocab];
+        shuffle(german);
+        shuffle(english);
+        german.forEach(pair => items.push({text: pair.langb, match: pair.langa, col: 1}));
+        english.forEach(pair => items.push({text: pair.langa, match: pair.langb, col: 2}));
+      }
+
+      shuffle(items);
+
+      items.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.textContent = item.text;
+        div.dataset.match = item.match;
+        div.addEventListener("click", handleCardClick);
+        if (item.col === 1) col1.appendChild(div);
+        else if (item.col === 2) col2.appendChild(div);
+        else (index % 2 === 0 ? col1 : col2).appendChild(div);
+      });
+    }
+
+    function handleCardClick(e) {
+      const card = e.target;
+      if (card.classList.contains("matched") || selected.includes(card)) return;
+      selected.push(card);
+      card.style.backgroundColor = "#ffffcc";
+
+      if (selected.length === 2) {
+        const [c1, c2] = selected;
+        const match = c1.dataset.match === c2.textContent || c2.dataset.match === c1.textContent;
+
+        if (match) {
+          selected.forEach(c => {
+            c.classList.add("matched");
+            c.style.backgroundColor = "#c8e6c9";
+          });
+          score++;
+          localStorage.setItem('matchGameScore', score);
+          updateScoreDisplay();
+        } else {
+          fullVocab.forEach(pair => {
+            if ([c1.textContent, c2.textContent].includes(pair.langb) || [c1.textContent, c2.textContent].includes(pair.langa)) {
+              mistakeTracker[pair.langb] = true;
+              mistakeTracker[pair.langa] = true;
+            }
+          });
+          document.getElementById("hint").textContent = `Hint: '${c1.textContent}' does not mean '${c2.textContent}'`;
+          selected.forEach(c => c.style.backgroundColor = "#f8d7da");
+        }
+
+        setTimeout(() => {
+          selected.forEach(c => {
+            if (!c.classList.contains("matched")) {
+              c.style.backgroundColor = "";
+            }
+          });
+          selected = [];
+          document.getElementById("hint").textContent = '';
+        }, 1000);
+      }
+    }
+
+    function resetGame(mode) {
+      resetCount++;
+      const MAX_VISIBLE = getMaxVisible();
+      const mistakes = fullVocab.filter(v => mistakeTracker[v.de] || mistakeTracker[v.en]);
+      const rest = fullVocab.filter(v => !mistakeTracker[v.de] && !mistakeTracker[v.en]);
+
+      if (mode === 'mistakes') {
+        currentVocab = mistakes.concat(rest).slice(0, MAX_VISIBLE);
+      } else {
+        shuffle(rest);
+        const preserved = mistakes;
+        const newWords = rest.slice(0, Math.max(2, MAX_VISIBLE - preserved.length));
+        currentVocab = preserved.concat(newWords).slice(0, MAX_VISIBLE);
+      }
+      shuffle(currentVocab);
+      buildGame();
+    }
+
+    function exportMistakes() {
+      let lines = ["Mistake List:"];
+      let found = false;
+      fullVocab.forEach(pair => {
+        if (mistakeTracker[pair.langb] || mistakeTracker[pair.langa]) {
+          lines.push(pair.langb + " ⇔ " + pair.langa);
+          found = true;
+        }
+      });
+      if (!found) {
+        alert("No mistakes to export yet.");
+        return;
+      }
+      const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "mistakes.txt";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    updateScoreDisplay();
+    resetGame('new');
+  </script>
+</body>
+</html>
